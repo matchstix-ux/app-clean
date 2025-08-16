@@ -28,7 +28,7 @@
       </div>
       <div id="status" class="status" aria-live="polite"></div>
     </form>
-
+<div id="results"></div>
     <section id="results" class="results" hidden>
       <h2>Recommendations</h2>
       <div id="cards" class="cards"></div>
@@ -41,5 +41,53 @@
 
   <!-- If your repo uses a different filename, update the src below to match -->
   <script src="app.js?v=avoid1"></script>
+  <script>
+// Helper to escape HTML
+function esc(s=""){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+// Fetch recommendations from your Netlify function
+async function showRecs(cigar) {
+  const res = await fetch('/.netlify/functions/recommend', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ cigar, avoid: [] })
+  });
+  const data = await res.json();
+  const container = document.getElementById('results');
+
+  if (!data || !Array.isArray(data.recommendations)) {
+    container.innerHTML = `<p>Sorry, no recommendations right now.</p>`;
+    return;
+  }
+
+  container.innerHTML = data.recommendations.map(rec => {
+    const title = [rec.brand, rec.name].filter(Boolean).join(' ');
+    const notes = (rec.flavorNotes || []).length ? `<p>Notes: ${rec.flavorNotes.map(esc).join(', ')}</p>` : '';
+    let linksHtml = '';
+
+    // Show all links if available
+    if (Array.isArray(rec.urls) && rec.urls.length) {
+      linksHtml = '<div>' + rec.urls.map(l =>
+        `<a href="${esc(l.url)}" target="_blank">${esc(l.label)}</a>`
+      ).join(' | ') + '</div>';
+    } else if (rec.url) {
+      linksHtml = `<div><a href="${esc(rec.url)}" target="_blank">Buy</a></div>`;
+    }
+
+    return `
+      <div style="border:1px solid #ccc;padding:10px;margin:10px 0;">
+        <h3>${esc(title)}</h3>
+        <p>Price: ${esc(rec.priceRange || '—')} • Strength: ${rec.strength ?? '—'}</p>
+        ${notes}
+        ${linksHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+// 🔹 Test call — shows recs for Padron 1964 when the page loads
+showRecs("Padron 1964");
+</script>
+
 </body>
 </html>
