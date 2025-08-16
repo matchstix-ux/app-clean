@@ -1,17 +1,17 @@
 // netlify/functions/recommend.js
-// Netlify Functions v2 (ESM). Single-file version (no imports).
+// Netlify Functions v2 (ESM). Single-file, no imports. Drop this in as-is.
 
-// --- CORS helpers ---
-const CORS_HEADERS = {
-  "access-control-allow-origin": "*", // tighten to your domain if needed
-  "access-control-allow-methods": "POST, OPTIONS",
-  "access-control-allow-headers": "content-type, authorization",
+// ---------- CORS ----------
+const CORS = {
+  "access-control-allow-origin": "*",           // tighten to your domain if needed
+  "access-control-allow-methods": "POST,OPTIONS",
+  "access-control-allow-headers": "content-type,authorization",
   "content-type": "application/json"
 };
-const cors = (body, status = 200, extra = {}) =>
-  new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, ...extra } });
+const j = (obj, status = 200, extra = {}) =>
+  new Response(JSON.stringify(obj), { status, headers: { ...CORS, ...extra } });
 
-// --- Cuban detector (embedded) ---
+// ---------- Cuban detector + US filter ----------
 function isCuban(meta = {}) {
   const origin  = (meta.origin || meta.country || meta.country_of_origin || "").trim().toLowerCase();
   const owner   = (meta.brand_owner || meta.owner || "").trim().toLowerCase();
@@ -22,37 +22,28 @@ function isCuban(meta = {}) {
   if (origin === "cuba" || origin === "cu") return true;
   if (owner.includes("habanos")) return true;
 
-  const dualMarketBrands = [
-    "cohiba", "montecristo", "romeo y julieta", "h. upmann", "h upmann",
-    "partagás", "partagas", "trinidad", "bolivar", "punch", "ramon allones",
-    "quai d'orsay"
+  const duals = [
+    "cohiba","montecristo","romeo y julieta","h. upmann","h upmann",
+    "partagás","partagas","trinidad","bolivar","punch","ramon allones","quai d'orsay"
   ];
-  const isDual = dualMarketBrands.some(k => brand.includes(k));
+  const isDual = duals.some(k => brand.includes(k));
 
   if (isDual) {
     if (origin && origin !== "cuba" && !owner.includes("habanos")) return false;
-    const hints = ["el laguito", "partagas factory", "la corona", "habana", "habano"];
+    const hints = ["el laguito","partagas factory","la corona","habana","habano"];
     if (hints.some(h => factory.includes(h) || name.includes(h))) return true;
-    return false; // keep ambiguous so US counterparts survive
+    return false;
   }
-
   if (/(habana|habano)/i.test(name)) return true;
-
   return false;
 }
-
 function filterForUSMarket(results = []) {
-  try {
-    return results.filter(r => !isCuban(r?.metadata || {}));
-  } catch (e) {
-    console.error("Market filter error", e);
-    return results; // fail-open
-  }
+  try { return results.filter(r => !isCuban(r?.metadata || {})); }
+  catch (e) { console.error("Market filter error", e); return results; }
 }
 
-// --- Fallback if OpenAI is unavailable ---
-function fallbackRecs(seedStr = "") {
-  // simple deterministic shuffle by seed for variety across calls
+// ---------- Fallback (always returns 3 items) ----------
+function fallbackRecs(seedKey = "") {
   const pool = [
     { name:"Liga Privada No. 9", brand:"Drew Estate", priceRange:"$$$", strength:8, flavorNotes:["espresso","dark chocolate","cedar"] },
     { name:"Oliva Serie V Melanio", brand:"Oliva", priceRange:"$$$", strength:7, flavorNotes:["cocoa","toast","leather"] },
@@ -61,56 +52,61 @@ function fallbackRecs(seedStr = "") {
     { name:"My Father Le Bijou 1922", brand:"My Father", priceRange:"$$$", strength:8, flavorNotes:["pepper","espresso","cocoa"] },
     { name:"EP Carrillo Pledge", brand:"E.P. Carrillo", priceRange:"$$$", strength:7, flavorNotes:["graham","cocoa","spice"] },
     { name:"Brick House Maduro", brand:"J.C. Newman", priceRange:"$", strength:5, flavorNotes:["cocoa","nutty","sweet spice"] },
-    { name:"CAO Brazilia", brand:"CAO", priceRange:"$", strength:6, flavorNotes:["coffee","earth","dark sweetness"] },
+    { name:"CAO Brazilia", brand:"CAO", priceRange:"$", strength:6, flavorNotes:["coffee","earth","dark sweetness"] }
   ];
-  let seed = 0;
-  for (const ch of String(seedStr)) seed = (seed * 33 + ch.charCodeAt(0)) >>> 0;
+  // deterministic-ish shuffle
+  let s = 0; for (const ch of String(seedKey)) s = (s * 33 + ch.charCodeAt(0)) >>> 0;
   for (let i = pool.length - 1; i > 0; i--) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const j = seed % (i + 1);
+    s = (s * 1664525 + 1013904223) >>> 0;
+    const j = s % (i + 1);
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   return pool.slice(0, 3);
 }
 
-// --- Netlify Function ---
+// ---------- Helper: sanitize ----------
+const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
+const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
+const strip = (s) => String(s||"")
+  .replace(/^Why Similar:\s*/i,"")
+  .replace(/^Key Differences?:\s*/i,"")
+  .trim();
+const stripNotes = (arr)=> (Array.isArray(arr)?arr:[])
+  .map(strip)
+  .filter(Boolean)
+  .filter(x=>!BAD.some(rx=>rx.test(x)));
+
+// ---------- Function handler ----------
 export default async (req) => {
   try {
-    // Handle CORS preflight
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
-    }
+    // CORS preflight
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
-    if (req.method !== "POST") {
-      return cors({ error: "Method not allowed. Use POST." }, 405);
-    }
+    if (req.method !== "POST") return j({ error: "Method not allowed. Use POST." }, 405);
 
-    // Try to parse JSON body; support form posts that forgot the header
+    // Parse body robustly (works even if header is wrong)
     let body = {};
+    const ct = req.headers.get("content-type") || "";
     try {
-      body = await req.json();
-    } catch {
-      // If the client forgot to set content-type, try to read text and parse query-ish strings
-      const text = await req.text().catch(() => "");
-      if (text && text.trim().startsWith("{")) {
-        try { body = JSON.parse(text); } catch { body = {}; }
+      if (ct.includes("application/json")) {
+        body = await req.json();
       } else {
-        body = {};
+        const txt = await req.text();
+        body = txt && txt.trim().startsWith("{") ? JSON.parse(txt) : {};
       }
-    }
+    } catch { body = {}; }
 
     const cigar = typeof body.cigar === "string" ? body.cigar.trim() : "";
     const avoid = Array.isArray(body.avoid) ? body.avoid.filter(Boolean).slice(0, 50) : [];
-
     if (!cigar) {
-      console.warn("Bad request: missing 'cigar' in body", { bodyPreview: JSON.stringify(body).slice(0, 200) });
-      return cors({ error: "Invalid input: provide a 'cigar' string." }, 400);
+      console.warn("Bad request: missing 'cigar'", { bodyPreview: JSON.stringify(body).slice(0, 200) });
+      // Still return 3 to keep UI responsive
+      return j({ recommendations: fallbackRecs("missing:"+Date.now()) }, 200);
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Build prompt
     const seed = Math.floor(Math.random() * 1_000_000);
     const avoidLine = avoid.length ? `NEVER include any of these AVOID items: ${avoid.join("; ")}.` : "";
-
     const system = `You are a cigar expert who replies ONLY with JSON.
 Random seed: ${seed}.
 Always vary your recommendations — avoid repeating the same cigars if asked multiple times about the same input.
@@ -143,19 +139,16 @@ Respond ONLY with a JSON object in this shape:
   ]
 }`;
 
-    let modelResponseOk = false;
+    // Call OpenAI (if API key is present). Otherwise we fall back.
+    const apiKey = process.env.OPENAI_API_KEY;
     let list = [];
+    let usedModel = false;
 
-    if (!apiKey) {
-      console.error("Missing env var: OPENAI_API_KEY");
-    } else {
+    if (apiKey) {
       try {
         const resp = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "authorization": `Bearer ${apiKey}`
-          },
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
             model: "gpt-4o-mini",
             temperature: 0.9,
@@ -175,82 +168,59 @@ Respond ONLY with a JSON object in this shape:
           const raw = await resp.json();
           const content = raw?.choices?.[0]?.message?.content || "{}";
           let parsed; try { parsed = JSON.parse(content); } catch { parsed = {}; }
-
           list = Array.isArray(parsed?.recommendations) ? parsed.recommendations : [];
-          modelResponseOk = list.length > 0;
+          usedModel = list.length > 0;
         }
       } catch (e) {
         console.error("OpenAI fetch failed:", e);
       }
+    } else {
+      console.error("Missing env var: OPENAI_API_KEY");
     }
 
-    // Sanitize + enforce schema
-    const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
-    const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
-    const strip = (s) => String(s||"")
-      .replace(/^Why Similar:\s*/i,"")
-      .replace(/^Key Differences?:\s*/i,"")
-      .trim();
-    const stripNotes = (arr)=> (Array.isArray(arr)?arr:[])
-      .map(strip)
-      .filter(Boolean)
-      .filter(x=>!BAD.some(rx=>rx.test(x)));
+    // If model failed, use fallback
+    if (!usedModel) list = fallbackRecs(cigar + ":" + seed);
 
-    // Fallback if we have nothing from the model
-    if (!modelResponseOk) {
-      list = fallbackRecs(cigar + ":" + seed);
-    }
-
-    // Normalize items
-    let clean = list.map(it=>{
+    // Sanitize & normalize
+    let clean = list.map(it => {
       const out = {};
       if (it && typeof it === "object") {
-        if (it.name!=null) out.name = strip(it.name);
-        if (it.brand!=null) out.brand = strip(it.brand);
-        if (it.priceRange!=null) out.priceRange = strip(it.priceRange);
-        out.strength = Math.max(1, Math.min(10, parseInt(it.strength,10) || 5));
+        if (it.name != null) out.name = strip(it.name);
+        if (it.brand != null) out.brand = strip(it.brand);
+        if (it.priceRange != null) out.priceRange = strip(it.priceRange);
+        out.strength = Math.max(1, Math.min(10, parseInt(it.strength, 10) || 5));
         out.flavorNotes = stripNotes(it.flavorNotes);
       }
-      Object.keys(out).forEach(k=>{ if(!ALLOWED.has(k)) delete out[k]; });
+      Object.keys(out).forEach(k => { if (!ALLOWED.has(k)) delete out[k]; });
       return out;
     });
 
-    // Avoid list
-    const avoidSet = new Set(avoid.map(a => a.toLowerCase()));
-    clean = clean.filter(it => !avoidSet.has(String(it?.name||"").toLowerCase()));
+    // Apply AVOID
+    const avoidSet = new Set(avoid.map(a => String(a).toLowerCase()));
+    clean = clean.filter(it => !avoidSet.has(String(it?.name || "").toLowerCase()));
 
-    // Minimal metadata so US filter can work
-    const withMeta = clean.map(it => ({
-      ...it,
-      metadata: { brand: it.brand || "", name: it.name || "" }
-    }));
-
-    // Apply US filter (drop Cuban)
+    // Add minimal metadata for US filter
+    const withMeta = clean.map(it => ({ ...it, metadata: { brand: it.brand || "", name: it.name || "" } }));
     const usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
 
-    // Shuffle for variety
+    // Shuffle
     for (let i = usOnly.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [usOnly[i], usOnly[j]] = [usOnly[j], usOnly[i]];
     }
 
-    // Enforce exactly 3
+    // Ensure exactly 3
     let final = usOnly.slice(0, 3);
-    while (final.length < 3) {
-      final.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
-    }
+    while (final.length < 3) final.push({ name: "TBD", brand: "", priceRange: "$$", strength: 5, flavorNotes: [] });
 
-    console.log("US filter summary:", {
-      cigar,
-      input: clean.length,
-      output: final.length,
-      usedModel: modelResponseOk
-    });
+    console.log("Recommend summary:", { cigar, inputCount: clean.length, finalCount: final.length, usedModel });
 
-    return cors({ recommendations: final }, 200);
+    // Always 200 w/ valid JSON so the UI "fires" and renders
+    return j({ recommendations: final }, 200);
 
   } catch (err) {
     console.error("Function error:", err);
-    return cors({ error: "Unexpected server error — please try again later." }, 500);
+    // Still return 3 to keep UI responsive
+    return j({ recommendations: fallbackRecs("fatal:"+Date.now()) }, 200);
   }
 };
