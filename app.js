@@ -40,7 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
         strength: Math.max(1, Math.min(10, parseInt(r.strength,10) || 5)),
         flavorNotes: Array.isArray(r.flavorNotes) ? r.flavorNotes : []
       })));
-      results && (results.hidden = list.length === 0);
+      \1
+      // Analytics: count searches (privacy-friendly)
+      try { if (window.plausible) window.plausible("search", { props: { q } }); } catch {}
+
       setBusy(false, list.length ? `Found ${list.length} recommendations.` : "No recommendations found.");
     } catch (err) {
       console.error(err);
