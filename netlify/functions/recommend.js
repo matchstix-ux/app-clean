@@ -1,6 +1,16 @@
 // /.netlify/functions/recommend
 // Netlify Functions v2 (ESM).
 // Strict schema (no 'why/similar/differences'), honors 'avoid', higher variety, and post-shuffle.
+import { isCuban } from "./metadata/isCuban.js";
+
+export function filterForUSMarket(results = []) {
+  try {
+    return results.filter(r => !isCuban(r?.metadata || {}));
+  } catch (e) {
+    console.error("Market filter error", e);
+    return results; // fail-open, so nothing breaks
+  }
+}
 
 export default async (req) => {
   try {
@@ -68,7 +78,7 @@ Respond ONLY with a JSON object in this shape:
       headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.9,             // ↑ more varied
+        temperature: 0.9,
         max_tokens: 700,
         response_format: { type: "json_object" },
         messages: [
@@ -125,19 +135,34 @@ Respond ONLY with a JSON object in this shape:
       return out;
     });
 
+    // ⚠️ NEW: adapt to our filter (we only have brand/name here)
+    // Build minimal "metadata" so the filter can decide safely.
+    const withMeta = clean.map(it => ({
+      ...it,
+      metadata: {
+        brand: it.brand || "",
+        name: it.name || ""
+        // We don't have origin/owner here, so the filter defaults to KEEP
+        // unless strong Cuban signals (e.g., 'Habana', 'Habanos', factory hints) appear in name/brand.
+      }
+    }));
+
+    // ✅ Apply the US-market filter
+    const usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
+
     // Post-process shuffle for extra variety (Fisher-Yates)
-    for (let i = clean.length - 1; i > 0; i--) {
+    for (let i = usOnly.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [clean[i], clean[j]] = [clean[j], clean[i]];
+      [usOnly[i], usOnly[j]] = [usOnly[j], usOnly[i]];
     }
 
     // Enforce exactly 3 items; pad if needed
-    clean = clean.slice(0, 3);
-    while (clean.length < 3) {
-      clean.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
+    let final = usOnly.slice(0, 3);
+    while (final.length < 3) {
+      final.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
     }
 
-    return new Response(JSON.stringify({ recommendations: clean }), {
+    return new Response(JSON.stringify({ recommendations: final }), {
       status: 200, headers: { "content-type": "application/json" }
     });
 
