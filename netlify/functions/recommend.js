@@ -1,3 +1,4 @@
+
 // netlify/functions/recommend.js
 // Netlify Functions v2 (ESM). Single-file version (no imports).
 
@@ -40,6 +41,16 @@ function filterForUSMarket(results = []) {
   }
 }
 
+// --- Retail links builder (returns ALL three in your preferred order) ---
+function buildRetailUrls(it = {}) {
+  const q = encodeURIComponent(`${it.brand || ""} ${it.name || ""}`.trim());
+  return [
+    { label: "Famous Smoke", url: `https://www.famous-smoke.com/search?query=${q}` },
+    { label: "Cigars International", url: `https://www.cigarsinternational.com/search/?q=${q}` },
+    { label: "JR Cigars", url: `https://www.jrcigars.com/search/?q=${q}` }
+  ];
+}
+
 // --- Netlify Function ---
 export default async (req) => {
   try {
@@ -61,7 +72,6 @@ export default async (req) => {
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      // Make this loud in logs so it's easy to spot in Netlify
       console.error("Missing env var: OPENAI_API_KEY");
       return new Response(JSON.stringify({ error: "Server missing API key" }), {
         status: 500, headers: { "content-type": "application/json" }
@@ -103,7 +113,6 @@ Respond ONLY with a JSON object in this shape:
   ]
 }`;
 
-    // Node 18+ on Netlify has global fetch; if not, pin Node 18 in Netlify UI.
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
@@ -131,7 +140,8 @@ Respond ONLY with a JSON object in this shape:
     const content = raw?.choices?.[0]?.message?.content || "{}";
     let parsed; try { parsed = JSON.parse(content); } catch { parsed = {}; }
 
-    const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
+    // Allow urls array in output we return
+    const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes","urls"]);
     const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
     const strip = (s) => String(s||"")
       .replace(/^Why Similar:\s*/i,"")
@@ -144,11 +154,13 @@ Respond ONLY with a JSON object in this shape:
 
     let list = Array.isArray(parsed?.recommendations) ? parsed.recommendations : [];
 
+    // AVOID filtering by name (case-insensitive)
     if (avoid.length) {
       const avoidSet = new Set(avoid.map(a => a.toLowerCase()));
       list = list.filter(it => !avoidSet.has(String(it?.name||"").toLowerCase()));
     }
 
+    // Clean & normalize model output
     let clean = list.map(it=>{
       const out = {};
       if (it && typeof it === "object") {
@@ -162,14 +174,14 @@ Respond ONLY with a JSON object in this shape:
       return out;
     });
 
-    // Build minimal metadata (brand/name) so the filter can work
+    // Build minimal metadata so the filter can work on brand/name
     const withMeta = clean.map(it => ({
       ...it,
       metadata: { brand: it.brand || "", name: it.name || "" }
     }));
 
-    // Apply US-market filter (drops Cuban; keeps US counterparts)
-    const usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
+    // Apply US-market filter
+    let usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
 
     // Shuffle for variety
     for (let i = usOnly.length - 1; i > 0; i--) {
@@ -183,11 +195,11 @@ Respond ONLY with a JSON object in this shape:
       final.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
     }
 
-    // Optional: visibility into filtering (shows in Netlify logs)
-    console.log("US filter summary:", {
-      input: clean.length,
-      output: final.length
-    });
+    // Attach ALL retailer links
+    final = final.map(it => ({ ...it, urls: buildRetailUrls(it) }));
+
+    // Log summary
+    console.log("US filter summary:", { input: clean.length, output: final.length });
 
     return new Response(JSON.stringify({ recommendations: final }), {
       status: 200, headers: { "content-type": "application/json" }
