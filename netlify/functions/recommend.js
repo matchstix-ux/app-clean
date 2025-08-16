@@ -1,6 +1,7 @@
 // /.netlify/functions/recommend
 // Netlify Functions v2 (ESM).
 // Strict schema (no 'why/similar/differences'), honors 'avoid', higher variety, and post-shuffle.
+
 import { isCuban } from "./metadata/isCuban.js";
 
 export function filterForUSMarket(results = []) {
@@ -8,7 +9,7 @@ export function filterForUSMarket(results = []) {
     return results.filter(r => !isCuban(r?.metadata || {}));
   } catch (e) {
     console.error("Market filter error", e);
-    return results; // fail-open, so nothing breaks
+    return results; // fail-open so nothing breaks
   }
 }
 
@@ -16,7 +17,8 @@ export default async (req) => {
   try {
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405, headers: { "content-type": "application/json" }
+        status: 405,
+        headers: { "content-type": "application/json" }
       });
     }
 
@@ -26,14 +28,16 @@ export default async (req) => {
 
     if (!cigar) {
       return new Response(JSON.stringify({ error: "Invalid input" }), {
-        status: 400, headers: { "content-type": "application/json" }
+        status: 400,
+        headers: { "content-type": "application/json" }
       });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "Server missing API key" }), {
-        status: 500, headers: { "content-type": "application/json" }
+        status: 500,
+        headers: { "content-type": "application/json" }
       });
     }
 
@@ -75,10 +79,13 @@ Respond ONLY with a JSON object in this shape:
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
+      headers: {
+        "content-type": "application/json",
+        "authorization": `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.9,
+        temperature: 0.9,           // ↑ more varied
         max_tokens: 700,
         response_format: { type: "json_object" },
         messages: [
@@ -89,10 +96,11 @@ Respond ONLY with a JSON object in this shape:
     });
 
     if (!resp.ok) {
-      const txt = await resp.text().catch(()=>"");
+      const txt = await resp.text().catch(() => "");
       console.error("OpenAI API error:", txt);
       return new Response(JSON.stringify({ error: "Sorry — our cigar recommender is temporarily unavailable. Please try again later." }), {
-        status: 502, headers: { "content-type": "application/json" }
+        status: 502,
+        headers: { "content-type": "application/json" }
       });
     }
 
@@ -121,33 +129,31 @@ Respond ONLY with a JSON object in this shape:
       list = list.filter(it => !avoidSet.has(String(it?.name||"").toLowerCase()));
     }
 
-    // Clean & normalize
-    let clean = list.map(it=>{
+    // Clean & normalize model output
+    let clean = list.map(it => {
       const out = {};
       if (it && typeof it === "object") {
-        if (it.name!=null) out.name = strip(it.name);
-        if (it.brand!=null) out.brand = strip(it.brand);
-        if (it.priceRange!=null) out.priceRange = strip(it.priceRange);
-        out.strength = Math.max(1, Math.min(10, parseInt(it.strength,10) || 5));
+        if (it.name != null) out.name = strip(it.name);
+        if (it.brand != null) out.brand = strip(it.brand);
+        if (it.priceRange != null) out.priceRange = strip(it.priceRange);
+        out.strength = Math.max(1, Math.min(10, parseInt(it.strength, 10) || 5));
         out.flavorNotes = stripNotes(it.flavorNotes);
       }
-      Object.keys(out).forEach(k=>{ if(!ALLOWED.has(k)) delete out[k]; });
+      Object.keys(out).forEach(k => { if (!ALLOWED.has(k)) delete out[k]; });
       return out;
     });
 
-    // ⚠️ NEW: adapt to our filter (we only have brand/name here)
-    // Build minimal "metadata" so the filter can decide safely.
+    // Build minimal metadata so the filter can work on brand/name
     const withMeta = clean.map(it => ({
       ...it,
       metadata: {
         brand: it.brand || "",
         name: it.name || ""
-        // We don't have origin/owner here, so the filter defaults to KEEP
-        // unless strong Cuban signals (e.g., 'Habana', 'Habanos', factory hints) appear in name/brand.
+        // No origin here; isCuban() defaults to KEEP unless strong Cuban hints.
       }
     }));
 
-    // ✅ Apply the US-market filter
+    // Apply US-market filter (drops Cuban; keeps US counterparts)
     const usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
 
     // Post-process shuffle for extra variety (Fisher-Yates)
@@ -159,17 +165,19 @@ Respond ONLY with a JSON object in this shape:
     // Enforce exactly 3 items; pad if needed
     let final = usOnly.slice(0, 3);
     while (final.length < 3) {
-      final.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
+      final.push({ name: "TBD", brand: "", priceRange: "$$", strength: 5, flavorNotes: [] });
     }
 
     return new Response(JSON.stringify({ recommendations: final }), {
-      status: 200, headers: { "content-type": "application/json" }
+      status: 200,
+      headers: { "content-type": "application/json" }
     });
 
   } catch (err) {
     console.error("Function error:", err);
     return new Response(JSON.stringify({ error: "Unexpected server error — please try again later." }), {
-      status: 500, headers: { "content-type": "application/json" }
+      status: 500,
+      headers: { "content-type": "application/json" }
     });
   }
 };
