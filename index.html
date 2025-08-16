@@ -3,155 +3,99 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MatchSticks — Digital Cigar Sommelier</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Cigar Recommender</title>
+  <style>
+    :root{
+      --bg:#0c0c0d;
+      --surface:#141416;
+      --muted:#9aa0a6;
+      --text:#e9eaee;
+      --accent:#7a2731;
+      --accent-2:#a13442;
+      --border:#232428;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+         font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    .wrap{max-width:860px;margin:40px auto;padding:20px}
+    h1{margin-bottom:20px;font-weight:700}
+    .panel{background:var(--surface);border:1px solid var(--border);
+           border-radius:16px;padding:20px}
+    label{display:block;font-weight:600;margin-bottom:8px}
+    .controls{display:flex;gap:10px}
+    input{flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);
+          background:#0f0f11;color:var(--text);}
+    input:focus{border-color:var(--accent);outline:none}
+    button{padding:12px 16px;border:0;border-radius:12px;
+           background:linear-gradient(180deg,var(--accent),var(--accent-2));
+           color:white;font-weight:600;cursor:pointer}
+    .status{margin-top:12px;color:var(--muted)}
+    .grid{margin-top:20px;display:grid;gap:14px;
+          grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    .card{background:var(--surface);border:1px solid var(--border);
+          border-radius:16px;padding:16px}
+    .name{font-weight:700}
+    .brand{color:#d6d7db}
+    .meta{margin-top:6px;font-size:.9rem;color:#c9cad0}
+    .notes{margin-top:6px;color:#d6d7db}
+  </style>
 </head>
 <body>
-  <header class="header">
-    <div class="brand">
-      <div class="logo">🔥</div>
-      <div class="titles">
-        <h1>MatchSticks</h1>
-        <p>Find cigars like your favorites</p>
-      </div>
-    </div>
-  </header>
-<!-- === Cigar Recommender (Drop-in) === -->
-<section class="recs" style="max-width:620px;margin:24px auto;font-family:system-ui, -apple-system, Segoe UI, Roboto;">
-  <label for="cigarInput" style="display:block;font-weight:600;margin-bottom:6px;">Enter a cigar</label>
-  <div style="display:flex; gap:8px;">
-    <input id="cigarInput" type="text" placeholder="e.g., Padron 1964 Anniversary"
-           style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px" />
-    <button id="goBtn" type="button"
-            style="padding:10px 14px;border:0;border-radius:8px;background:#222;color:#fff;cursor:pointer">
-      Get 3 recs
-    </button>
+  <div class="wrap">
+    <h1>Cigar Recommender</h1>
+    <section class="panel">
+      <form id="recsForm" novalidate>
+        <label for="cigarInput">Enter a cigar</label>
+        <div class="controls">
+          <input id="cigarInput" type="text" placeholder="e.g., Padrón 1964 Anniversary" />
+          <button type="submit">Get 3 recs</button>
+        </div>
+      </form>
+      <div id="status" class="status"></div>
+      <div id="results" class="grid"></div>
+    </section>
   </div>
 
-  <div id="status" style="margin-top:10px;color:#666;"></div>
+  <script>
+    const form = document.getElementById('recsForm');
+    const input = document.getElementById('cigarInput');
+    const status = document.getElementById('status');
+    const results = document.getElementById('results');
 
-  <div id="results" style="margin-top:14px;display:grid;gap:10px;"></div>
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cigar = input.value.trim();
+      results.innerHTML = '';
+      if (!cigar) { status.textContent = 'Please enter a cigar.'; return; }
+      status.textContent = 'Loading…';
 
-  <details style="margin-top:14px;">
-    <summary style="cursor:pointer;">Debug</summary>
-    <pre id="debug" style="background:#111;color:#9fe;border-radius:8px;padding:10px;overflow:auto;max-height:220px;"></pre>
-  </details>
-</section>
-
-<script>
-(function(){
-  const input   = document.getElementById('cigarInput');
-  const btn     = document.getElementById('goBtn');
-  const status  = document.getElementById('status');
-  const results = document.getElementById('results');
-  const debugEl = document.getElementById('debug');
-
-  const log = (...args) => {
-    console.log(...args);
-    const line = args.map(a => {
-      try { return typeof a === 'string' ? a : JSON.stringify(a,null,2); }
-      catch { return String(a); }
-    }).join(' ');
-    debugEl.textContent += line + '\n';
-  };
-
-  async function getRecs() {
-    const cigar = (input.value || '').trim();
-    results.innerHTML = '';
-    status.textContent = 'Working…';
-    log('Click fired. Cigar:', cigar);
-
-    if (!cigar) {
-      status.textContent = 'Please enter a cigar.';
-      return;
-    }
-
-    try {
-      const res = await fetch('/.netlify/functions/recommend', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ cigar })
-      });
-
-      const text = await res.text();           // read raw text for better error visibility
-      log('HTTP', res.status, res.statusText);
-      log('Raw response:', text);
-
-      let data = {};
-      try { data = JSON.parse(text); } catch (e) { /* keep data as {} */ }
-
-      if (!res.ok) {
-        status.textContent = data?.error || ('Request failed: ' + res.status);
-        return;
+      try {
+        const res = await fetch('/.netlify/functions/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cigar })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          status.textContent = data.error || 'Error fetching recommendations.';
+          return;
+        }
+        const items = data.recommendations || [];
+        if (!items.length) { status.textContent = 'No recommendations.'; return; }
+        status.textContent = '';
+        results.innerHTML = items.map(it => `
+          <div class="card">
+            <div class="name">${it.name}</div>
+            <div class="brand">${it.brand}</div>
+            <div class="meta">Price: ${it.priceRange}, Strength: ${it.strength}</div>
+            <div class="notes">${(it.flavorNotes||[]).join(', ')}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+        status.textContent = 'Network error.';
       }
-
-      const items = data?.recommendations;
-      if (!Array.isArray(items) || items.length === 0) {
-        status.textContent = 'No recommendations returned.';
-        return;
-      }
-
-      status.textContent = 'Done.';
-      results.innerHTML = items.map(it => `
-        <div style="border:1px solid #ddd;padding:12px;border-radius:10px">
-          <div style="font-weight:700">${it.name ?? ''}</div>
-          <div style="color:#555">${it.brand ?? ''}</div>
-          <div style="margin-top:6px">Price: ${it.priceRange ?? ''} • Strength: ${it.strength ?? ''}</div>
-          <div style="color:#444;margin-top:6px">${Array.isArray(it.flavorNotes) ? it.flavorNotes.join(', ') : ''}</div>
-        </div>
-      `).join('');
-
-    } catch (err) {
-      log('Fetch error:', err);
-      status.textContent = 'Network error (see Debug).';
-    }
-  }
-
-  // Button click
-  btn.addEventListener('click', getRecs);
-
-  // Enter key in input
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();   // stop accidental form submit
-      getRecs();
-    }
-  });
-
-  // Safety: if this lives inside a <form>, prevent full reload on submit
-  let node = input;
-  while (node) {
-    if (node.tagName === 'FORM') {
-      node.addEventListener('submit', (e) => { e.preventDefault(); getRecs(); });
-      break;
-    }
-    node = node.parentElement;
-  }
-})();
-</script>
-<!-- === End drop-in === -->
-
-  <main class="container">
-    <section class="panel">
-      <label for="cigar" class="label">Enter a cigar</label>
-      <div class="row">
-        <input id="cigar" type="text" placeholder="e.g., Padron 1964, Opus X, Montecristo No. 2" />
-        <button id="go">Find Matches</button>
-      </div>
-      <p id="hint" class="hint"></p>
-      <div id="status" class="status" aria-live="polite"></div>
-    </section>
-
-    <section id="results" class="results" hidden>
-      <h2>Recommendations</h2>
-      <div id="cards" class="cards"></div>
-    </section>
-  </main>
-
-  <footer class="footer">
-    <small>© <span id="year"></span> MatchSticks</small>
-  </footer>
-
-  <script src="app.js"></script>
+    });
+  </script>
 </body>
 </html>
