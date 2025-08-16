@@ -3,218 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Digital Cigar Sommelier</title>
-  <style>
-    :root {
-      --bg: #0b0b0d;
-      --panel: #141418;
-      --panel-2: #1a1b20;
-      --text: #e8e8ee;
-      --muted: #a6a7b0;
-      --accent: #7b6cff; /* keep your accent if you had one */
-      --border: #2a2b33;
-      --error: #ff6b6b;
-      --ok: #38d39f;
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-    }
-    .wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 60px; }
-    header { display:flex; align-items:center; gap:14px; margin-bottom: 22px; }
-    .logo {
-      width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(145deg, var(--panel), var(--panel-2));
-      display:flex; align-items:center; justify-content:center; font-weight:700; color: var(--accent);
-      border: 1px solid var(--border);
-    }
-    h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 12px 30px rgba(0,0,0,0.35);
-    }
-
-    /* form */
-    form.card { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    label { font-size: 12px; color: var(--muted); }
-    input, textarea, select, button {
-      width: 100%; padding: 12px 12px; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--panel-2); color: var(--text); outline: none;
-    }
-    input::placeholder, textarea::placeholder { color: #838595; }
-    .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    @media (min-width: 720px) {
-      .row { grid-template-columns: 1.2fr 1fr; }
-    }
-    .actions { display: flex; gap: 10px; align-items: center; }
-    button[type="submit"] {
-      background: var(--accent); border: none; font-weight: 600; cursor: pointer;
-      transition: transform .05s ease;
-    }
-    button[type="submit"]:active { transform: translateY(1px) scale(0.997); }
-    .muted { color: var(--muted); font-size: 12px; }
-
-    /* results grid */
-    .results-wrap { margin-top: 18px; display: none; }
-    .results-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-    @media (min-width: 640px) {
-      .results-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (min-width: 960px) {
-      .results-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    }
-    .rec {
-      background: linear-gradient(145deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px;
-    }
-    .rec h3 { margin: 0 0 6px; font-size: 16px; }
-    .brand { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
-    .meta { display:flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-    .pill {
-      font-size: 11px; border: 1px solid var(--border); padding: 4px 8px; border-radius: 999px; background: #101117;
-    }
-    ul.notes { list-style: none; padding: 0; margin: 0; display:flex; flex-wrap: wrap; gap: 6px; }
-    ul.notes li { font-size: 12px; color: var(--muted); border: 1px dashed var(--border); padding: 4px 8px; border-radius: 10px; }
-
-    .status { margin-top: 12px; font-size: 13px; }
-    .status.ok { color: var(--ok); }
-    .status.err { color: var(--error); }
-    .hidden { display: none !important; }
-  </style>
+  <title>MatchSticks — Cigar Recommender</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="logo">CR</div>
-      <h1>Digital Cigar Sommelier</h1>
-    </header>
+  <header class="header">
+    <div class="brand">
+      <div class="logo">🔥</div>
+      <div class="titles">
+        <h1>MatchSticks</h1>
+        <p>Find cigars similar to your favorites</p>
+      </div>
+    </div>
+  </header>
 
-    <!-- Form (no auto-fetch; user must submit) -->
-    <form id="recoForm" class="card" autocomplete="off">
+  <main class="container">
+    <section class="panel">
+      <label for="cigar" class="label">Enter a cigar you like</label>
       <div class="row">
-        <div>
-          <label for="cigar">Cigar you like</label>
-          <input id="cigar" name="cigar" placeholder="e.g. Oliva Serie V Melanio" required />
-        </div>
-        <div>
-          <label for="avoid">Avoid list (optional, comma-separated)</label>
-          <input id="avoid" name="avoid" placeholder="e.g. Cohiba, H. Upmann" />
-        </div>
+        <input id="cigar" type="text" placeholder="e.g., Padron 1964, Opus X, Montecristo No. 2" />
+        <button id="go">Find Matches</button>
       </div>
-      <div class="actions">
-        <button type="submit">Get 3 recommendations</button>
-        <span id="status" class="status muted"></span>
-      </div>
-    </form>
-
-    <!-- Results (hidden until we have data) -->
-    <section id="results" class="results-wrap">
-      <div id="grid" class="results-grid"></div>
+      <p id="hint" class="hint">No API key in the browser. Your key stays safe on the server.</p>
+      <div id="status" class="status" aria-live="polite"></div>
     </section>
-  </div>
 
-  <script>
-    const form = document.getElementById('recoForm');
-    const statusEl = document.getElementById('status');
-    const results = document.getElementById('results');
-    const grid = document.getElementById('grid');
+    <section id="results" class="results" hidden>
+      <h2>Recommendations</h2>
+      <div id="cards" class="cards"></div>
+    </section>
+  </main>
 
-    // IMPORTANT: No auto-call here. We wait for submit.
-    // This is why you were seeing cards before—your old code likely fetched on load or rendered placeholders.
+  <footer class="footer">
+    <small>© <span id="year"></span> MatchSticks</small>
+  </footer>
 
-    function setStatus(text, type = 'muted') {
-      statusEl.textContent = text || '';
-      statusEl.className = 'status ' + (type || 'muted');
-    }
-
-    function toPill(label, value) {
-      return `<span class="pill"><strong>${label}:</strong> ${value}</span>`;
-    }
-
-    function render(recs = []) {
-      if (!Array.isArray(recs) || recs.length === 0) {
-        results.style.display = 'none';
-        grid.innerHTML = '';
-        return;
-      }
-      results.style.display = 'block';
-      grid.innerHTML = recs.map(r => {
-        const name = (r?.name || '').toString();
-        const brand = (r?.brand || '').toString();
-        const price = (r?.priceRange || '').toString();
-        const strength = Number.isFinite(r?.strength) ? r.strength : '';
-        const notes = Array.isArray(r?.flavorNotes) ? r.flavorNotes : [];
-        return `
-          <article class="rec">
-            <h3>${name}</h3>
-            <div class="brand">${brand}</div>
-            <div class="meta">
-              ${price ? toPill('Price', price) : ''}
-              ${strength ? toPill('Strength', strength + '/10') : ''}
-            </div>
-            ${notes.length ? `<ul class="notes">${notes.map(n => `<li>${n}</li>`).join('')}</ul>` : ''}
-          </article>
-        `;
-      }).join('');
-    }
-
-    async function getRecs(cigar, avoidCsv) {
-      const avoid = (avoidCsv || '')
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      const res = await fetch('/.netlify/functions/recommend', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ cigar, avoid })
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Function error ${res.status}: ${txt || 'unknown'}`);
-      }
-      return res.json();
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const cigar = document.getElementById('cigar').value.trim();
-      const avoid = document.getElementById('avoid').value.trim();
-      if (!cigar) {
-        setStatus('Please enter a cigar name.', 'err');
-        return;
-      }
-      setStatus('Finding great matches…');
-      render([]); // keep results hidden during load
-
-      try {
-        const data = await getRecs(cigar, avoid);
-        const recs = Array.isArray(data?.recommendations) ? data.recommendations : [];
-        if (recs.length === 0) {
-          setStatus('No recommendations returned. Try another cigar.', 'err');
-          render([]);
-          return;
-        }
-        setStatus('Done.', 'ok');
-        render(recs);
-      } catch (err) {
-        console.error(err);
-        setStatus('Something went wrong. Please try again.', 'err');
-        render([]);
-      }
-    });
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
