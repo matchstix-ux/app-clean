@@ -1,7 +1,15 @@
 // netlify/functions/recommend.js
 // Netlify Functions v2 (ESM). Single-file version (no imports).
 
-// --- Cuban detector (embedded) ---
+// ---------- CORS ----------
+const CORS_HEADERS = {
+  "content-type": "application/json",
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "Content-Type, Authorization",
+};
+
+// ---------- Cuban detector (embedded) ----------
 function isCuban(meta = {}) {
   const origin  = (meta.origin || meta.country || meta.country_of_origin || "").trim().toLowerCase();
   const owner   = (meta.brand_owner || meta.owner || "").trim().toLowerCase();
@@ -40,12 +48,17 @@ function filterForUSMarket(results = []) {
   }
 }
 
-// --- Netlify Function ---
+// ---------- Netlify Function ----------
 export default async (req) => {
   try {
+    // Preflight
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405, headers: { "content-type": "application/json" }
+        status: 405, headers: CORS_HEADERS
       });
     }
 
@@ -55,7 +68,7 @@ export default async (req) => {
 
     if (!cigar) {
       return new Response(JSON.stringify({ error: "Invalid input" }), {
-        status: 400, headers: { "content-type": "application/json" }
+        status: 400, headers: CORS_HEADERS
       });
     }
 
@@ -63,7 +76,7 @@ export default async (req) => {
     if (!apiKey) {
       console.error("Missing env var: OPENAI_API_KEY");
       return new Response(JSON.stringify({ error: "Server missing API key" }), {
-        status: 500, headers: { "content-type": "application/json" }
+        status: 500, headers: CORS_HEADERS
       });
     }
 
@@ -119,17 +132,22 @@ Respond ONLY with a JSON object in this shape:
 
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
-      console.error("OpenAI API error:", txt);
+      console.error("OpenAI API error:", resp.status, txt);
       return new Response(JSON.stringify({ error: "Sorry — our cigar recommender is temporarily unavailable. Please try again later." }), {
-        status: 502, headers: { "content-type": "application/json" }
+        status: 502, headers: CORS_HEADERS
       });
     }
 
-    const raw = await resp.json();
+    const raw = await resp.json().catch(() => ({}));
     const content = raw?.choices?.[0]?.message?.content || "{}";
-    let parsed; try { parsed = JSON.parse(content); } catch { parsed = {}; }
 
-    // Allow only the specified fields
+    let parsed;
+    try { parsed = JSON.parse(content); } catch (e) {
+      console.error("Model returned non-JSON:", content);
+      parsed = {};
+    }
+
+    // Only the specified fields (links removed)
     const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
     const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
     const strip = (s) => String(s||"")
@@ -156,4 +174,81 @@ Respond ONLY with a JSON object in this shape:
         if (it.name!=null) out.name = strip(it.name);
         if (it.brand!=null) out.brand = strip(it.brand);
         if (it.priceRange!=null) out.priceRange = strip(it.priceRange);
-        out.strength = Math.max(1, Math.min(10
+        out.strength = Math.max(1, Math.min(10, Number.isFinite(+it.strength) ? parseInt(it.strength,10) : 5));
+        out.flavorNotes = stripNotes(it.flavorNotes);
+      }
+      // drop unknown keys
+      Object.keys(out).forEach(k=>{ if(!ALLOWED.has(k)) delete out[k]; });
+      return out;
+    }).filter(it => it?.name && it?.brand);
+
+    // Deduplicate by name+brand
+    const seen = new Set();
+    clean = clean.filter(it => {
+      const key = `${it.name.toLowerCase()}|${it.brand.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Build minimal metadata so the filter can work on brand/name
+    const withMeta = clean.map(it => ({
+      ...it,
+      metadata: { brand: it.brand || "", name: it.name || "" }
+    }));
+
+    // Apply US-market filter
+    let usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
+
+    // Shuffle for variety
+    for (let i = usOnly.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [usOnly[i], usOnly[j]] = [usOnly[j], usOnly[i]];
+    }
+
+    // Ensure exactly 3 items:
+    // 1) take US-only
+    // 2) if short, backfill from CLEAN (non-US-filtered) that aren't already included
+    // 3) if still short, pad with placeholders
+    const pickKey = (it) => `${(it.name||"").toLowerCase()}|${(it.brand||"").toLowerCase()}`;
+    const chosen = [];
+    const chosenSet = new Set();
+
+    const take = (arr) => {
+      for (const it of arr) {
+        if (chosen.length >= 3) break;
+        const k = pickKey(it);
+        if (!k || chosenSet.has(k)) continue;
+        chosen.push(it);
+        chosenSet.add(k);
+      }
+    };
+
+    take(usOnly);
+    if (chosen.length < 3) {
+      // backfill from clean (unfiltered)
+      const backfill = clean.filter(it => !chosenSet.has(pickKey(it)));
+      // basic shuffle
+      for (let i = backfill.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [backfill[i], backfill[j]] = [backfill[j], backfill[i]];
+      }
+      take(backfill);
+    }
+    while (chosen.length < 3) {
+      chosen.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
+    }
+
+    console.log("US filter summary:", { input: clean.length, usOnly: usOnly.length, output: chosen.length });
+
+    return new Response(JSON.stringify({ recommendations: chosen.slice(0,3) }), {
+      status: 200, headers: CORS_HEADERS
+    });
+
+  } catch (err) {
+    console.error("Function error:", err);
+    return new Response(JSON.stringify({ error: "Unexpected server error — please try again later." }), {
+      status: 500, headers: CORS_HEADERS
+    });
+  }
+};
