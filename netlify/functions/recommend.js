@@ -1,5 +1,7 @@
 // /.netlify/functions/recommend
-// Netlify Functions v2 (ESM). Strict schema + variety + friendly errors + "avoid" support.
+// Netlify Functions v2 (ESM).
+// Strict schema (no 'why/similar/differences'), honors 'avoid', higher variety, and post-shuffle.
+
 export default async (req) => {
   try {
     if (req.method !== "POST") {
@@ -25,6 +27,7 @@ export default async (req) => {
       });
     }
 
+    // Variety nudges
     const seed = Math.floor(Math.random() * 1_000_000);
     const avoidLine = avoid.length ? `NEVER include any of these AVOID items: ${avoid.join("; ")}.` : "";
 
@@ -34,7 +37,7 @@ Always vary your recommendations — avoid repeating the same cigars if asked mu
 ${avoidLine}
 NEVER include fields named "why", "similarity", "differences", or any prose that starts with "Why Similar" or "Key Differences".
 Return ONLY the following fields per item: name, brand, priceRange, strength, flavorNotes.
-Output exactly 3 unique recommendations. Also ensure the 3 items span at least 2 different brands and, when possible, different regions or distinct strength levels.`;
+Output exactly 3 unique recommendations. Ensure the 3 items span at least 2 different brands and, when possible, distinct regions or strength levels.`;
 
     const user = `Given the cigar "${cigar}", recommend EXACTLY 3 different cigars that someone who enjoys this cigar would also like.
 Rules:
@@ -65,7 +68,7 @@ Respond ONLY with a JSON object in this shape:
       headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 1.0,
+        temperature: 0.9,             // ↑ more varied
         max_tokens: 700,
         response_format: { type: "json_object" },
         messages: [
@@ -83,17 +86,33 @@ Respond ONLY with a JSON object in this shape:
       });
     }
 
+    // Parse model JSON
     const raw = await resp.json();
     const content = raw?.choices?.[0]?.message?.content || "{}";
     let parsed; try { parsed = JSON.parse(content); } catch { parsed = {}; }
 
+    // Sanitize + whitelist keys
     const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
     const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
-    const strip = (s) => String(s||"").replace(/^Why Similar:\s*/i,"").replace(/^Key Differences?:\s*/i,"").trim();
-    const stripNotes = (arr)=> (Array.isArray(arr)?arr:[]).map(strip).filter(Boolean).filter(x=>!BAD.some(rx=>rx.test(x)));
+    const strip = (s) => String(s||"")
+      .replace(/^Why Similar:\s*/i,"")
+      .replace(/^Key Differences?:\s*/i,"")
+      .trim();
+    const stripNotes = (arr)=> (Array.isArray(arr)?arr:[])
+      .map(strip)
+      .filter(Boolean)
+      .filter(x=>!BAD.some(rx=>rx.test(x)));
 
-    const list = Array.isArray(parsed?.recommendations) ? parsed.recommendations.slice(0,3) : [];
-    const clean = list.map(it=>{
+    let list = Array.isArray(parsed?.recommendations) ? parsed.recommendations : [];
+
+    // Filter out anything in the avoid list (case-insensitive compare on name)
+    if (avoid.length) {
+      const avoidSet = new Set(avoid.map(a => a.toLowerCase()));
+      list = list.filter(it => !avoidSet.has(String(it?.name||"").toLowerCase()));
+    }
+
+    // Clean & normalize
+    let clean = list.map(it=>{
       const out = {};
       if (it && typeof it === "object") {
         if (it.name!=null) out.name = strip(it.name);
@@ -106,9 +125,19 @@ Respond ONLY with a JSON object in this shape:
       return out;
     });
 
-    while (clean.length < 3) clean.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
+    // Post-process shuffle for extra variety (Fisher-Yates)
+    for (let i = clean.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [clean[i], clean[j]] = [clean[j], clean[i]];
+    }
 
-    return new Response(JSON.stringify({ recommendations: clean.slice(0,3) }), {
+    // Enforce exactly 3 items; pad if needed
+    clean = clean.slice(0, 3);
+    while (clean.length < 3) {
+      clean.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
+    }
+
+    return new Response(JSON.stringify({ recommendations: clean }), {
       status: 200, headers: { "content-type": "application/json" }
     });
 
