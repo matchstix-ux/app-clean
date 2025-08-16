@@ -1,4 +1,3 @@
-
 // netlify/functions/recommend.js
 // Netlify Functions v2 (ESM). Single-file version (no imports).
 
@@ -39,9 +38,6 @@ function filterForUSMarket(results = []) {
     console.error("Market filter error", e);
     return results; // fail-open
   }
-}
-
-  ];
 }
 
 // --- Netlify Function ---
@@ -133,8 +129,8 @@ Respond ONLY with a JSON object in this shape:
     const content = raw?.choices?.[0]?.message?.content || "{}";
     let parsed; try { parsed = JSON.parse(content); } catch { parsed = {}; }
 
-    // Allow urls array in output we return
-    const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes","urls"]);
+    // Allow only the specified fields
+    const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
     const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
     const strip = (s) => String(s||"")
       .replace(/^Why Similar:\s*/i,"")
@@ -160,48 +156,4 @@ Respond ONLY with a JSON object in this shape:
         if (it.name!=null) out.name = strip(it.name);
         if (it.brand!=null) out.brand = strip(it.brand);
         if (it.priceRange!=null) out.priceRange = strip(it.priceRange);
-        out.strength = Math.max(1, Math.min(10, parseInt(it.strength,10) || 5));
-        out.flavorNotes = stripNotes(it.flavorNotes);
-      }
-      Object.keys(out).forEach(k=>{ if(!ALLOWED.has(k)) delete out[k]; });
-      return out;
-    });
-
-    // Build minimal metadata so the filter can work on brand/name
-    const withMeta = clean.map(it => ({
-      ...it,
-      metadata: { brand: it.brand || "", name: it.name || "" }
-    }));
-
-    // Apply US-market filter
-    let usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
-
-    // Shuffle for variety
-    for (let i = usOnly.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [usOnly[i], usOnly[j]] = [usOnly[j], usOnly[i]];
-    }
-
-    // Enforce exactly 3 items; pad if needed
-    let final = usOnly.slice(0, 3);
-    while (final.length < 3) {
-      final.push({ name:"TBD", brand:"", priceRange:"$$", strength:5, flavorNotes:[] });
-    }
-
-    // Attach ALL retailer links
-    final = final.map(it => ({ ...it, urls: buildRetailUrls(it) }));
-
-    // Log summary
-    console.log("US filter summary:", { input: clean.length, output: final.length });
-
-    return new Response(JSON.stringify({ recommendations: final }), {
-      status: 200, headers: { "content-type": "application/json" }
-    });
-
-  } catch (err) {
-    console.error("Function error:", err);
-    return new Response(JSON.stringify({ error: "Unexpected server error — please try again later." }), {
-      status: 500, headers: { "content-type": "application/json" }
-    });
-  }
-};
+        out.strength = Math.max(1, Math.min(10
