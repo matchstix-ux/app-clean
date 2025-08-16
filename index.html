@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cigar Recommender</title>
+  <title>MatchSticks — Digital Cigar Sommelier</title>
   <style>
     :root{
       --bg:#0c0c0d;
@@ -18,7 +18,10 @@
     body{margin:0;background:var(--bg);color:var(--text);
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
     .wrap{max-width:860px;margin:40px auto;padding:20px}
-    h1{margin-bottom:20px;font-weight:700}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+    header img{height:40px;width:auto}
+    .brand{font-weight:700;font-size:1.3rem}
+    .tag{color:var(--muted);font-size:1rem}
     .panel{background:var(--surface);border:1px solid var(--border);
            border-radius:16px;padding:20px}
     label{display:block;font-weight:600;margin-bottom:8px}
@@ -42,7 +45,14 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Cigar Recommender</h1>
+    <header>
+      <img src="/logo.svg" alt="MatchSticks Logo" />
+      <div>
+        <div class="brand">MatchSticks</div>
+        <div class="tag">Digital Cigar Sommelier</div>
+      </div>
+    </header>
+
     <section class="panel">
       <form id="recsForm" novalidate>
         <label for="cigarInput">Enter a cigar</label>
