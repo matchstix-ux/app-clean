@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MatchStix — Cigar Recommender</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; margin:0; padding:20px; background:#111; color:#eee; }
+    .panel { background:#1b1b1b; border:1px solid #2a2a2a; border-radius:10px; padding:16px; }
+    .row { display:flex; gap:8px; margin-top:8px; }
+    input[type="text"] { flex:1; padding:10px 12px; border-radius:8px; border:1px solid #2a2a2a; background:#121212; color:#eee; }
+    button { padding:10px 14px; border-radius:8px; border:0; background:#ff7a1a; color:#000; font-weight:600; cursor:pointer; }
+    .status { color:#aaa; margin-top:8px; min-height:20px; }
+    #results { margin-top:20px; }
+    .cards { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:12px; }
+    .card { background:#1b1b1b; border:1px solid #2a2a2a; border-radius:10px; padding:12px; }
+    .brandline { color:#bbb; font-size:13px; }
+    .bar { display:flex; gap:4px; margin:6px 0 8px; }
+    .dot { width:8px; height:8px; border-radius:2px; background:#333; }
+    .dot.on { background:#ff7a1a; }
+    .badge { display:inline-block; background:#2a2a2a; color:#ffd8bd; padding:2px 8px; border-radius:999px; font-size:12px; }
+    .notes { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .note { background:#2a2a2a; padding:4px 8px; border-radius:999px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>MatchStix — Cigar Recommender</h1>
+  <form id="searchForm" class="panel">
+    <label for="query">Enter a cigar you like</label>
+    <div class="row">
+      <input id="query" type="text" placeholder="e.g., Padron 1964, Opus X, Montecristo No. 2" />
+      <button type="submit">Get recommendations</button>
+    </div>
+    <p class="status" id="status">No API key in the browser. Your key stays safe on the server.</p>
+  </form>
+
+  <section id="results" hidden>
+    <h2>Recommendations</h2>
+    <div id="cards" class="cards"></div>
+  </section>
+
+  <script src="app.js?v=avoid1"></script>
+</body>
+</html>
