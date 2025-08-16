@@ -41,13 +41,6 @@ function filterForUSMarket(results = []) {
   }
 }
 
-// --- Retail links builder (returns ALL three in your preferred order) ---
-function buildRetailUrls(it = {}) {
-  const q = encodeURIComponent(`${it.brand || ""} ${it.name || ""}`.trim());
-  return [
-    { label: "Famous Smoke", url: `https://www.famous-smoke.com/search?query=${q}` },
-    { label: "Cigars International", url: `https://www.cigarsinternational.com/search/?q=${q}` },
-    { label: "JR Cigars", url: `https://www.jrcigars.com/search/?q=${q}` }
   ];
 }
 
