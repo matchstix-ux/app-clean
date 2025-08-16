@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,13 +7,8 @@
   <title>MatchSticks — Digital Cigar Sommelier</title>
   <style>
     :root{
-      --bg:#0c0c0d;
-      --surface:#141416;
-      --muted:#9aa0a6;
-      --text:#e9eaee;
-      --accent:#7a2731;
-      --accent-2:#a13442;
-      --border:#232428;
+      --bg:#0c0c0d; --surface:#141416; --muted:#9aa0a6; --text:#e9eaee;
+      --accent:#7a2731; --accent-2:#a13442; --border:#232428;
     }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);
@@ -46,7 +42,8 @@
 <body>
   <div class="wrap">
     <header>
-      <img src="/logo.svg" alt="MatchSticks Logo" />
+      <!-- ONLY CHANGE #1: use relative path -->
+      <img id="brandLogo" src="./logo.svg" alt="MatchSticks Logo" />
       <div>
         <div class="brand">MatchSticks</div>
         <div class="tag">Digital Cigar Sommelier</div>
@@ -67,6 +64,25 @@
   </div>
 
   <script>
+    // ONLY CHANGE #2: tiny logo auto-finder (no styling changes)
+    (async function ensureLogo(){
+      const img = document.getElementById('brandLogo');
+      const candidates = [
+        './logo.svg','./logo.png',
+        '/images/logo.svg','/images/logo.png',
+        '/assets/logo.svg','/assets/logo.png',
+        '/static/logo.svg','/static/logo.png'
+      ];
+      for (const url of candidates) {
+        try {
+          const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+          if (r.ok) { img.src = url; return; }
+        } catch(_) {}
+      }
+      // If none found, hide the broken image but keep brand text
+      img.style.display = 'none';
+    })();
+
     const form = document.getElementById('recsForm');
     const input = document.getElementById('cigarInput');
     const status = document.getElementById('status');
@@ -86,10 +102,7 @@
           body: JSON.stringify({ cigar })
         });
         const data = await res.json();
-        if (!res.ok) {
-          status.textContent = data.error || 'Error fetching recommendations.';
-          return;
-        }
+        if (!res.ok) { status.textContent = data.error || 'Error fetching recommendations.'; return; }
         const items = data.recommendations || [];
         if (!items.length) { status.textContent = 'No recommendations.'; return; }
         status.textContent = '';
