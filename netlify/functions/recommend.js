@@ -24,17 +24,17 @@ function isCuban(meta = {}) {
 
   const duals = [
     "cohiba","montecristo","romeo y julieta","h. upmann","h upmann",
-    "partagás","partagas","trinidad","bolivar","punch","ramon allones","quai d'orsay"
+    "partagás","partagas","trinidad","bolivar","punch","ramon allones"
   ];
   const isDual = duals.some(k => brand.includes(k));
 
   if (isDual) {
     if (origin && origin !== "cuba" && !owner.includes("habanos")) return false;
-    const hints = ["el laguito","partagas factory","la corona","habana","habano"];
+    const hints = ["el laguito","partagas factory","Behike","#2","la corona","habana","habanos"];
     if (hints.some(h => factory.includes(h) || name.includes(h))) return true;
     return false;
   }
-  if (/(habana|habano)/i.test(name)) return true;
+  if (/(habana|habanos)/i.test(name)) return true;
   return false;
 }
 function filterForUSMarket(results = []) {
