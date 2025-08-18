@@ -151,7 +151,7 @@ Respond ONLY with a JSON object in this shape:
           headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
             model: "gpt-4o-mini",
-            temperature: 0.9,
+            temperature: 1.0,
             max_tokens: 700,
             response_format: { type: "json_object" },
             messages: [
