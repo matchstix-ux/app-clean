@@ -1,5 +1,5 @@
 // netlify/functions/recommend.js
-// Netlify Functions v2 (ESM). Single-file, no imports. Drop this in as-is.
+// Netlify Functions v2 (ESM). Single-file, no imports. Ready for deployment.
 
 // ---------- CORS ----------
 const CORS = {
@@ -43,8 +43,8 @@ function filterForUSMarket(results = []) {
   catch (e) { console.error("Market filter error", e); return results; }
 }
 
-// ---------- Fallback (always returns 3 items) ----------
-function fallbackRecs(seedKey = "") {
+// ---------- True-Random Fallback (3 items) ----------
+function fallbackRecs() {
   const pool = [
     { name:"Liga Privada No. 9", brand:"Drew Estate", priceRange:"$$$", strength:8, flavorNotes:["espresso","dark chocolate","cedar"] },
     { name:"Oliva Serie V Melanio", brand:"Oliva", priceRange:"$$$", strength:7, flavorNotes:["cocoa","toast","leather"] },
@@ -55,16 +55,14 @@ function fallbackRecs(seedKey = "") {
     { name:"Brick House Maduro", brand:"J.C. Newman", priceRange:"$", strength:5, flavorNotes:["cocoa","nutty","sweet spice"] },
     { name:"CAO Brazilia", brand:"CAO", priceRange:"$", strength:6, flavorNotes:["coffee","earth","dark sweetness"] }
   ];
-  let s = 0; for (const ch of String(seedKey)) s = (s * 33 + ch.charCodeAt(0)) >>> 0;
   for (let i = pool.length - 1; i > 0; i--) {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    const j = s % (i + 1);
+    const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   return pool.slice(0, 3);
 }
 
-// ---------- Helper: sanitize ----------
+// ---------- Sanitize ----------
 const ALLOWED = new Set(["name","brand","priceRange","strength","flavorNotes"]);
 const BAD = [/^why\s+similar/i, /^key\s+differences?/i];
 const strip = (s) => String(s||"")
@@ -96,23 +94,24 @@ export default async (req) => {
     const cigar = typeof body.cigar === "string" ? body.cigar.trim() : "";
     const avoid = Array.isArray(body.avoid) ? body.avoid.filter(Boolean).slice(0, 50) : [];
 
-    const timestamp = Date.now();
     if (!cigar) {
       console.warn("Bad request: missing 'cigar'", { bodyPreview: JSON.stringify(body).slice(0, 200) });
-      return j({ recommendations: fallbackRecs("missing:" + timestamp) }, 200);
+      return j({ recommendations: fallbackRecs() }, 200);
     }
 
-    const seed = Math.floor(Math.random() * 1_000_000);
+    // Entropy for prompt variation
+    const entropy = Math.floor(Math.random() * 1_000_000);
     const avoidLine = avoid.length ? `NEVER include any of these AVOID items: ${avoid.join("; ")}.` : "";
     const system = `You are a cigar expert who replies ONLY with JSON.
-Random seed: ${seed}.
-Always vary your recommendations — avoid repeating the same cigars if asked multiple times about the same input.
+Entropy ID: ${entropy}.
+Always vary your recommendations — never repeat the same list, even if the cigar input is the same.
 ${avoidLine}
 NEVER include fields named "why", "similarity", "differences", or any prose that starts with "Why Similar" or "Key Differences".
 Return ONLY the following fields per item: name, brand, priceRange, strength, flavorNotes.
 Output exactly 3 unique recommendations. Ensure the 3 items span at least 2 different brands and, when possible, distinct regions or strength levels.`;
 
     const user = `Given the cigar "${cigar}", recommend EXACTLY 3 different cigars that someone who enjoys this cigar would also like.
+Session ID: ${entropy}
 Rules:
 - Do not repeat any item from the AVOID list above (if present).
 - Prefer a mix of brands/regions/strengths so results differ across calls.
@@ -147,9 +146,8 @@ Respond ONLY with a JSON object in this shape:
           headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
             model: "gpt-4o-mini",
-            temperature: 1.0,
+            temperature: 1.2,
             max_tokens: 700,
-            response_format: "json",
             messages: [
               { role: "system", content: system },
               { role: "user", content: user }
@@ -180,7 +178,7 @@ Respond ONLY with a JSON object in this shape:
       console.error("Missing env var: OPENAI_API_KEY");
     }
 
-    if (!usedModel) list = fallbackRecs(cigar + ":" + seed);
+    if (!usedModel) list = fallbackRecs();
 
     let clean = list.map(it => {
       const out = {};
@@ -214,6 +212,6 @@ Respond ONLY with a JSON object in this shape:
     return j({ recommendations: final }, 200);
   } catch (err) {
     console.error("Function error:", err);
-    return j({ recommendations: fallbackRecs("fatal:" + Date.now()) }, 200);
+    return j({ recommendations: fallbackRecs() }, 200);
   }
 };
