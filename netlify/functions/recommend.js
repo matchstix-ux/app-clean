@@ -3,7 +3,7 @@
 
 // ---------- CORS ----------
 const CORS = {
-  "access-control-allow-origin": "*",           // tighten to your domain if needed
+  "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST,OPTIONS",
   "access-control-allow-headers": "content-type,authorization",
   "content-type": "application/json"
@@ -30,10 +30,11 @@ function isCuban(meta = {}) {
 
   if (isDual) {
     if (origin && origin !== "cuba" && !owner.includes("habanos")) return false;
-    const hints = ["el laguito","partagas factory","Behike","#2","la corona","habana","habanos"];
+    const hints = ["el laguito","partagas factory","behike","#2","la corona","habana","habanos"];
     if (hints.some(h => factory.includes(h) || name.includes(h))) return true;
     return false;
   }
+
   if (/(habana|habanos)/i.test(name)) return true;
   return false;
 }
@@ -54,7 +55,6 @@ function fallbackRecs(seedKey = "") {
     { name:"Brick House Maduro", brand:"J.C. Newman", priceRange:"$", strength:5, flavorNotes:["cocoa","nutty","sweet spice"] },
     { name:"CAO Brazilia", brand:"CAO", priceRange:"$", strength:6, flavorNotes:["coffee","earth","dark sweetness"] }
   ];
-  // deterministic-ish shuffle
   let s = 0; for (const ch of String(seedKey)) s = (s * 33 + ch.charCodeAt(0)) >>> 0;
   for (let i = pool.length - 1; i > 0; i--) {
     s = (s * 1664525 + 1013904223) >>> 0;
@@ -71,24 +71,21 @@ const strip = (s) => String(s||"")
   .replace(/^Why Similar:\s*/i,"")
   .replace(/^Key Differences?:\s*/i,"")
   .trim();
-const stripNotes = (arr)=> (Array.isArray(arr)?arr:[])
-  .map(strip)
-  .filter(Boolean)
-  .filter(x=>!BAD.some(rx=>rx.test(x)));
+const stripNotes = (arr)=> {
+  const cleaned = (Array.isArray(arr)?arr:[]).map(strip).filter(Boolean).filter(x=>!BAD.some(rx=>rx.test(x)));
+  return cleaned.length ? cleaned : ["tobacco","spice","cedar"];
+};
 
 // ---------- Function handler ----------
 export default async (req) => {
   try {
-    // CORS preflight
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-
     if (req.method !== "POST") return j({ error: "Method not allowed. Use POST." }, 405);
 
-    // Parse body robustly (works even if header is wrong)
     let body = {};
     const ct = req.headers.get("content-type") || "";
     try {
-      if (ct.includes("application/json")) {
+      if (ct.toLowerCase().startsWith("application/json")) {
         body = await req.json();
       } else {
         const txt = await req.text();
@@ -98,13 +95,13 @@ export default async (req) => {
 
     const cigar = typeof body.cigar === "string" ? body.cigar.trim() : "";
     const avoid = Array.isArray(body.avoid) ? body.avoid.filter(Boolean).slice(0, 50) : [];
+
+    const timestamp = Date.now();
     if (!cigar) {
       console.warn("Bad request: missing 'cigar'", { bodyPreview: JSON.stringify(body).slice(0, 200) });
-      // Still return 3 to keep UI responsive
-      return j({ recommendations: fallbackRecs("missing:"+Date.now()) }, 200);
+      return j({ recommendations: fallbackRecs("missing:" + timestamp) }, 200);
     }
 
-    // Build prompt
     const seed = Math.floor(Math.random() * 1_000_000);
     const avoidLine = avoid.length ? `NEVER include any of these AVOID items: ${avoid.join("; ")}.` : "";
     const system = `You are a cigar expert who replies ONLY with JSON.
@@ -139,7 +136,6 @@ Respond ONLY with a JSON object in this shape:
   ]
 }`;
 
-    // Call OpenAI (if API key is present). Otherwise we fall back.
     const apiKey = process.env.OPENAI_API_KEY;
     let list = [];
     let usedModel = false;
@@ -153,7 +149,7 @@ Respond ONLY with a JSON object in this shape:
             model: "gpt-4o-mini",
             temperature: 1.0,
             max_tokens: 700,
-            response_format: { type: "json_object" },
+            response_format: "json",
             messages: [
               { role: "system", content: system },
               { role: "user", content: user }
@@ -167,7 +163,13 @@ Respond ONLY with a JSON object in this shape:
         } else {
           const raw = await resp.json();
           const content = raw?.choices?.[0]?.message?.content || "{}";
-          let parsed; try { parsed = JSON.parse(content); } catch { parsed = {}; }
+          let parsed;
+          try {
+            parsed = JSON.parse(content);
+          } catch (e) {
+            console.error("Failed to parse OpenAI content:", content);
+            parsed = {};
+          }
           list = Array.isArray(parsed?.recommendations) ? parsed.recommendations : [];
           usedModel = list.length > 0;
         }
@@ -178,10 +180,8 @@ Respond ONLY with a JSON object in this shape:
       console.error("Missing env var: OPENAI_API_KEY");
     }
 
-    // If model failed, use fallback
     if (!usedModel) list = fallbackRecs(cigar + ":" + seed);
 
-    // Sanitize & normalize
     let clean = list.map(it => {
       const out = {};
       if (it && typeof it === "object") {
@@ -195,32 +195,25 @@ Respond ONLY with a JSON object in this shape:
       return out;
     });
 
-    // Apply AVOID
     const avoidSet = new Set(avoid.map(a => String(a).toLowerCase()));
     clean = clean.filter(it => !avoidSet.has(String(it?.name || "").toLowerCase()));
 
-    // Add minimal metadata for US filter
     const withMeta = clean.map(it => ({ ...it, metadata: { brand: it.brand || "", name: it.name || "" } }));
     const usOnly = filterForUSMarket(withMeta).map(({ metadata, ...rest }) => rest);
 
-    // Shuffle
     for (let i = usOnly.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [usOnly[i], usOnly[j]] = [usOnly[j], usOnly[i]];
     }
 
-    // Ensure exactly 3
     let final = usOnly.slice(0, 3);
-    while (final.length < 3) final.push({ name: "TBD", brand: "", priceRange: "$$", strength: 5, flavorNotes: [] });
+    while (final.length < 3) final.push({ name: "TBD", brand: "", priceRange: "$$", strength: 5, flavorNotes: ["tobacco","cedar"] });
 
     console.log("Recommend summary:", { cigar, inputCount: clean.length, finalCount: final.length, usedModel });
 
-    // Always 200 w/ valid JSON so the UI "fires" and renders
     return j({ recommendations: final }, 200);
-
   } catch (err) {
     console.error("Function error:", err);
-    // Still return 3 to keep UI responsive
-    return j({ recommendations: fallbackRecs("fatal:"+Date.now()) }, 200);
+    return j({ recommendations: fallbackRecs("fatal:" + Date.now()) }, 200);
   }
 };
