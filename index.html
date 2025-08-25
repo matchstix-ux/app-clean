@@ -1,1 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MatchSticks — Personalized Cigar Recommendations</title>
+  <style>
+    :root{
+      --bg:#0c0c0d; --surface:#141416; --muted:#9aa0a6; --text:#e9eaee;
+      --accent:#7a2731; --accent-2:#a13442; --border:#232428;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+         font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    .wrap{max-width:860px;margin:40px auto;padding:20px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+    header img{height:40px;width:auto}
+    .brand{font-weight:700;font-size:1.3rem}
+    .tag{color:var(--muted);font-size:1rem}
+    .panel{background:var(--surface);border:1px solid var(--border);
+           border-radius:16px;padding:20px}
+    label{display:block;font-weight:600;margin-bottom:8px}
+    .controls{display:flex;gap:10px}
+    input{flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);
+          background:#0f0f11;color:var(--text);}
+    input:focus{border-color:var(--accent);outline:none}
+    button{padding:12px 16px;border:0;border-radius:12px;
+           background:linear-gradient(180deg,var(--accent),var(--accent-2));
+           color:white;font-weight:600;cursor:pointer}
+    .status{margin-top:12px;color:var(--muted)}
+    .grid{margin-top:20px;display:grid;gap:14px;
+          grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    .card{background:var(--surface);border:1px solid var(--border);
+          border-radius:16px;padding:16px}
+    .name{font-weight:700}
+    .brand{color:#d6d7db}
+    .meta{margin-top:6px;font-size:.9rem;color:#c9cad0}
+    .notes{margin-top:6px;color:#d6d7db}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img id="brandLogo" src="./logo.svg" alt="MatchSticks Logo" />
+      <div>
+        <div class="brand">MatchSticks - Find Your Smoke</div>
+        <div class="tag">Personalized Cigar Recommendations</div>
+      </div>
+    </header>
+
+    <section class="panel">
+      <form id="searchForm" novalidate>
+        <label for="query">Enter a cigar you like</label>
+        <div class="controls">
+          <input id="query" type="text" placeholder="e.g., Padrón 1964, Opus X, Liga 9" />
+          <button type="submit">Get 3 recs</button>
+        </div>
+      </form>
+      <div id="status" class="status"></div>
+      <div id="results" class="grid"></div>
+    </section>
+  </div>
+
+  <script>
+    (async function ensureLogo(){
+      const img = document.getElementById('brandLogo');
+      const candidates = [
+        './logo.svg','./logo.png',
+        '/images/logo.svg','/images/logo.png',
+        '/assets/logo.svg','/assets/logo.png',
+        '/static/logo.svg','/static/logo.png'
+      ];
+      for (const url of candidates) {
+        try {
+          const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+          if (r.ok) { img.src = url; return; }
+        } catch(_) {}
+      }
+      img.style.display = 'none';
+    })();
+
+    // No changes here; app.js is loaded separately
+  </script>
+</body>
+</html>
 
