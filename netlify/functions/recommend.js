@@ -1,73 +1,71 @@
 // netlify/functions/recommend.js
+// Netlify Functions v2 (ESM). No external imports needed. Assumes cigars.json in /netlify/data.
+
+import cigars from '../data/cigars.json'; // Update path if needed
 
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST,OPTIONS",
-  "access-control-allow-headers": "content-type",
+  "access-control-allow-headers": "content-type,authorization",
   "content-type": "application/json"
 };
 
-// US market: filter out Cuban brands
-const isCuban = (c) => {
-  // Brand check: expand this if you want more strict
-  const cubanBrands = [
-    "cohiba", "montecristo", "romeo y julieta", "partagas", "hoyo de monterrey", "bolivar", "trinidad", "quintero", "ramon allones", "veguero", "punch", "juan lopez"
-  ];
-  const brand = c.brand?.toLowerCase?.() || "";
-  // Check for telltale Cuban only
-  return cubanBrands.some(cb => brand === cb || brand.startsWith(cb + " (cuba"));
-};
+// Helper: Simple case-insensitive search
+function matchCigar(cigar, query) {
+  query = query.toLowerCase();
+  return (
+    cigar.name?.toLowerCase().includes(query) ||
+    cigar.brand?.toLowerCase().includes(query) ||
+    (Array.isArray(cigar.flavorNotes) && cigar.flavorNotes.some(note => note.toLowerCase().includes(query)))
+  );
+}
 
+// Helper: Remove Cubans by simple filter (edit as needed)
+function isUS(cigar) {
+  if (!cigar.brand) return true;
+  const forbidden = ['cohiba', 'montecristo', 'romeo', 'hoyo de monterrey', 'bolivar', 'partagas', 'trinidad', 'ramon allones', 'cuaba', 'quai d\'orsay', 'sancho panza', 'veguero', 'punch', 'por larranaga', 'juan lopez', 'el rey del mundo', 'h.upmann', 'hoyo', 'jose piedra', 'vegueros', 'quintero', 'la gloria cubana', 'diplomaticos'];
+  return !forbidden.some(f => cigar.brand.toLowerCase().includes(f));
+}
+
+// Fisher-Yates shuffle
 function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
+  let a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return arr;
+  return a;
 }
 
 export default async (req) => {
-  if (req.method === "OPTIONS")
-    return new Response(null, { status: 204, headers: CORS });
-
-  if (req.method !== "POST")
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: CORS });
-
-  let cigarName = "";
   try {
-    const body = await req.json();
-    cigarName = body.cigarName?.toLowerCase?.().trim() || "";
-    if (!cigarName) throw new Error();
-  } catch {
-    return new Response(JSON.stringify({ error: "Missing cigar name" }), { status: 400, headers: CORS });
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS });
+    }
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: CORS });
+    }
+
+    const { cigarName } = await req.json();
+    if (!cigarName) {
+      return new Response(JSON.stringify({ error: "Missing cigar name" }), { status: 400, headers: CORS });
+    }
+
+    // Only US-legal cigars
+    const usCigars = cigars.filter(isUS);
+
+    // Try direct match by name or brand or flavor notes
+    let recs = usCigars.filter(cigar => matchCigar(cigar, cigarName));
+
+    // Shuffle and pick 3
+    recs = shuffle(recs).slice(0, 3);
+
+    // Fallback: 3 random US cigars
+    if (!recs.length) recs = shuffle(usCigars).slice(0, 3);
+
+    return new Response(JSON.stringify(recs), { status: 200, headers: CORS });
+  } catch (err) {
+    console.error('Recommend error:', err);
+    return new Response(JSON.stringify({ error: "Server error", details: err.message }), { status: 500, headers: CORS });
   }
-
-  const cigars = await import("../../data/cigars.json").then(m => m.default);
-
-  // US market only
-  const usCigars = cigars.filter(c => !isCuban(c));
-
-  // Brand or name match
-  let recs = usCigars.filter(
-    c =>
-      c.name?.toLowerCase().includes(cigarName) ||
-      c.brand?.toLowerCase().includes(cigarName)
-  );
-
-  // If no match, try flavor notes
-  if (!recs.length) {
-    recs = usCigars.filter(
-      c =>
-        Array.isArray(c.flavorNotes) &&
-        c.flavorNotes.some(note => cigarName.includes(note.toLowerCase()))
-    );
-  }
-
-  // Shuffle for randomness, grab up to 3
-  recs = shuffle(recs).slice(0, 3);
-
-  // Fallback: 3 random US-market cigars
-  if (!recs.length) recs = shuffle(usCigars).slice(0, 3);
-return new Response(JSON.stringify({ recommendations: recs }), { status: 200, headers: CORS });
-
 };
