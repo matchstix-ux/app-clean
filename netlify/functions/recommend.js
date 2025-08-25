@@ -1,7 +1,6 @@
-// netlify/functions/recommend.js
+// netlify/functions/recommend.js — fully fixed
 export default async (req) => {
   try {
-    // Allow only POST requests
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
@@ -9,50 +8,39 @@ export default async (req) => {
       });
     }
 
-    // Parse request body safely
-    let cigar = "";
-    try {
-      const body = await req.json();
-      cigar = (body?.cigar || body?.cigarName || "").trim();
-    } catch {
-      cigar = "";
-    }
-
-    // Require cigar name
-    if (!cigar) {
+    const { cigar, avoid = [] } = await req.json();
+    if (!cigar || typeof cigar !== 'string') {
       return new Response(JSON.stringify({ error: "Missing cigar name" }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });
     }
 
-    // Load local data
-    const cigars = await import("../data/cigars.json").then((m) => m.default);
-    const brands = await import("../data/brands.json").then((m) => m.default);
+    // Load local JSON
+    const cigars = await import("../../data/cigars.json").then(m => m.default);
+    const brands = await import("../../data/brands.json").then(m => m.default);
 
-    // Fuzzy match: find any cigars whose name contains the input
-    const matches = cigars.filter((c) =>
-      c.name.toLowerCase().includes(cigar.toLowerCase())
-    );
+    // Filter duplicates + fuzzy match
+    const seen = new Set(avoid);
+    const matches = cigars
+      .filter(c => c.name.toLowerCase().includes(cigar.toLowerCase()))
+      .filter(c => !seen.has(c.name));
 
-    // Pick from matches if found, otherwise from full DB
-    const pool = matches.length ? matches : cigars;
+    const pool = matches.length ? matches : cigars.filter(c => !seen.has(c.name));
 
-    // Shuffle + pick top 3 recommendations
+    // Randomize and limit
     const recommendations = pool
       .sort(() => Math.random() - 0.5)
       .slice(0, 3)
-      .map((cigar) => ({
+      .map(cigar => ({
         ...cigar,
         brandInfo: brands[cigar.brand] || {}
       }));
 
-    // Send response
     return new Response(JSON.stringify({ recommendations }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
-
   } catch (err) {
     console.error("Function error:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
