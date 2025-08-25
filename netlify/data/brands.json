@@ -1,27 +1,11 @@
 {
-  "Oliva": {
-    "origin": "Nicaragua",
-    "boutique": false,
-    "avgPrice": "$9-$15"
-  },
   "Padron": {
-    "origin": "Nicaragua",
-    "boutique": false,
-    "avgPrice": "$10-$25"
+    "country": "Nicaragua"
   },
-  "Perdomo": {
-    "origin": "Nicaragua",
-    "boutique": false,
-    "avgPrice": "$7-$13"
+  "Oliva": {
+    "country": "Nicaragua"
   },
-  "Warped": {
-    "origin": "Nicaragua",
-    "boutique": true,
-    "avgPrice": "$9-$13"
-  },
-  "Foundation": {
-    "origin": "Nicaragua",
-    "boutique": true,
-    "avgPrice": "$8-$15"
+  "EP Carrillo": {
+    "country": "Dominican Republic"
   }
 }
