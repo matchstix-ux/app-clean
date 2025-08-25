@@ -1,1 +1,35 @@
-
+[
+  {
+    "name": "Padron 1964 Anniversary",
+    "brand": "Padron",
+    "priceRange": "$15-$20",
+    "strength": 8,
+    "flavorNotes": [
+      "Cocoa",
+      "Espresso",
+      "Earth"
+    ]
+  },
+  {
+    "name": "Oliva Serie V Melanio",
+    "brand": "Oliva",
+    "priceRange": "$12-$18",
+    "strength": 7,
+    "flavorNotes": [
+      "Cedar",
+      "Spice",
+      "Chocolate"
+    ]
+  },
+  {
+    "name": "EP Carrillo Encore",
+    "brand": "EP Carrillo",
+    "priceRange": "$11-$16",
+    "strength": 6,
+    "flavorNotes": [
+      "Leather",
+      "Nutmeg",
+      "Citrus"
+    ]
+  }
+]
