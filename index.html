@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -42,7 +41,6 @@
 <body>
   <div class="wrap">
     <header>
-      <!-- ONLY CHANGE #1: use relative path -->
       <img id="brandLogo" src="./logo.svg" alt="MatchSticks Logo" />
       <div>
         <div class="brand">MatchSticks - Find Your Smoke</div>
@@ -51,10 +49,10 @@
     </header>
 
     <section class="panel">
-      <form id="recsForm" novalidate>
-        <label for="cigarInput">Enter a cigar you like</label>
+      <form id="searchForm" novalidate>
+        <label for="query">Enter a cigar you like</label>
         <div class="controls">
-          <input id="cigarInput" type="text" placeholder="e.g., Padrón 1964, Opus X, Liga 9" />
+          <input id="query" type="text" placeholder="e.g., Padrón 1964, Opus X, Liga 9" />
           <button type="submit">Get 3 recs</button>
         </div>
       </form>
@@ -64,7 +62,6 @@
   </div>
 
   <script>
-    // ONLY CHANGE #2: tiny logo auto-finder (no styling changes)
     (async function ensureLogo(){
       const img = document.getElementById('brandLogo');
       const candidates = [
@@ -79,46 +76,10 @@
           if (r.ok) { img.src = url; return; }
         } catch(_) {}
       }
-      // If none found, hide the broken image but keep brand text
       img.style.display = 'none';
     })();
 
-    const form = document.getElementById('recsForm');
-    const input = document.getElementById('cigarInput');
-    const status = document.getElementById('status');
-    const results = document.getElementById('results');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const cigar = input.value.trim();
-      results.innerHTML = '';
-      if (!cigar) { status.textContent = 'Please enter a cigar.'; return; }
-      status.textContent = 'Loading…';
-
-      try {
-        const res = await fetch('/.netlify/functions/recommend', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cigar })
-        });
-        const data = await res.json();
-        if (!res.ok) { status.textContent = data.error || 'Error fetching recommendations.'; return; }
-        const items = data.recommendations || [];
-        if (!items.length) { status.textContent = 'No recommendations.'; return; }
-        status.textContent = '';
-        results.innerHTML = items.map(it => `
-          <div class="card">
-            <div class="name">${it.name}</div>
-            <div class="brand">${it.brand}</div>
-            <div class="meta">Price: ${it.priceRange}, Strength: ${it.strength}</div>
-            <div class="notes">${(it.flavorNotes||[]).join(', ')}</div>
-          </div>
-        `).join('');
-      } catch (err) {
-        console.error(err);
-        status.textContent = 'Network error.';
-      }
-    });
+    // No changes here; app.js is loaded separately
   </script>
 </body>
 </html>
