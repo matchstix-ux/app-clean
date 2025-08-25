@@ -1,1 +1,45 @@
+// /.netlify/functions/fetchFeeds.js
+import Parser from "rss-parser";
+
+const parser = new Parser();
+const feeds = [
+  "https://halfwheel.com/feed/",
+  "https://www.cigarjournal.com/feed/",
+  "https://cigardojo.com/feed/"
+];
+
+export default async function handler() {
+  try {
+    let allItems = [];
+
+    for (const url of feeds) {
+      try {
+        const feed = await parser.parseURL(url);
+        const items = feed.items.map(item => ({
+          title: item.title,
+          link: item.link,
+          date: item.pubDate,
+          source: feed.title
+        }));
+        allItems = allItems.concat(items);
+      } catch (e) {
+        console.error(`Failed to fetch ${url}:`, e);
+      }
+    }
+
+    // Sort newest first
+    allItems.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return new Response(JSON.stringify({ latest: allItems.slice(0, 10) }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (err) {
+    console.error("RSS fetch error:", err);
+    return new Response(JSON.stringify({ error: "Failed to fetch feeds" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+}
 
