@@ -18,8 +18,7 @@ export default async (req) => {
 
     // Load local JSON
     const cigars = await import("../../data/cigars.json").then(m => m.default);
-    const brands = await import("../../data/brands.json").then(m => m.default);
-
+    
     // Filter duplicates + fuzzy match
     const seen = new Set(avoid);
     const matches = cigars
