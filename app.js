@@ -1,7 +1,4 @@
 // app.js — works with IDs: searchForm, query, results, cards, status
-// Calls /.netlify/functions/recommend with { cigar, avoid }
-// Tracks seen cigars in localStorage to reduce repeats
-// Fires Plausible "search" event if available
 
 document.addEventListener('DOMContentLoaded', () => {
   const $ = (sel) => document.querySelector(sel);
@@ -105,12 +102,11 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const avoid = getSeen();
 
-      console.log("DEBUG — Sending to API:", { cigar: q, avoid }); // <-- added for verification
-
+      // KEY FIX: Use cigarName here, not cigar
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cigar: q, avoid }) // ✅ always sends 'cigar'
+        body: JSON.stringify({ cigarName: q, avoid })
       });
 
       if (!res.ok) {
@@ -119,9 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const data = await res.json().catch(() => ({}));
-      console.log('DEBUG — API response:', data); // <-- added for troubleshooting
-
-      const list = Array.isArray(data?.recommendations) ? data.recommendations : [];
+      const list = Array.isArray(data?.recommendations) ? data.recommendations :
+                   Array.isArray(data) ? data : [];
 
       // Update 'seen' so the next request will avoid these
       const newNames = list.map((r) => String(r?.name || '')).filter(Boolean);
@@ -143,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (results) results.hidden = list.length === 0;
 
-      // Analytics (optional; safe no-op if Plausible isn’t present)
+      // Analytics (optional)
       try {
         if (window.plausible) window.plausible('search', { props: { q } });
       } catch {}
