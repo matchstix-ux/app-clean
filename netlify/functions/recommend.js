@@ -68,6 +68,6 @@ export default async (req) => {
 
   // Fallback: 3 random US-market cigars
   if (!recs.length) recs = shuffle(usCigars).slice(0, 3);
+return new Response(JSON.stringify({ recommendations: recs }), { status: 200, headers: CORS });
 
-  return new Response(JSON.stringify(recs), { status: 200, headers: CORS });
 };
