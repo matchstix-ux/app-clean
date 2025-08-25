@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Oliva Serie V Melanio",
+    "brand": "Oliva",
+    "priceRange": "$12-$15",
+    "strength": "Full",
+    "flavorNotes": [
+      "Cocoa",
+      "Espresso",
+      "Leather"
+    ],
+    "metadata": {
+      "origin": "Nicaragua"
+    }
+  },
+  {
+    "name": "Padron 1964 Anniversary",
+    "brand": "Padron",
+    "priceRange": "$14-$18",
+    "strength": "Medium-Full",
+    "flavorNotes": [
+      "Chocolate",
+      "Coffee",
+      "Spice"
+    ],
+    "metadata": {
+      "origin": "Nicaragua"
+    }
+  },
+  {
+    "name": "Perdomo 10th Anniversary Champagne",
+    "brand": "Perdomo",
+    "priceRange": "$8-$10",
+    "strength": "Mild-Medium",
+    "flavorNotes": [
+      "Cream",
+      "Cedar",
+      "Vanilla"
+    ],
+    "metadata": {
+      "origin": "Nicaragua"
+    }
+  }
+]
